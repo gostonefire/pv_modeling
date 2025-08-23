@@ -1,0 +1,65 @@
+function loadScriptSequentially(file) {
+    return new Promise((resolve, reject) => {
+        const newScript = document.createElement('script');
+        newScript.setAttribute('src', file);
+        newScript.setAttribute('async', 'true');
+
+        newScript.onload = () => {
+            resolve(); // Resolve the promise
+        };
+        newScript.onerror = () => {
+            displayMessage(`Error loading script: ${file}`, 'error');
+            reject(new Error(`Error loading script: ${file}`));
+        };
+
+        document.head.appendChild(newScript);
+    });
+}
+
+function updateData() {
+    let year = $("#year").text();
+    let month = $("#month").text();
+    let day = $("#day").text();
+
+    let panel_power = $("#panel_power").text();
+    let panel_slope = $("#panel_slope").text();
+    let panel_east_azm = $("#panel_east_azm").text();
+    let iam_factor = $("#iam_factor").text();
+
+    let url = '/get_data?year=' + year + '&month=' + month + '&day=' + day +
+        '&panel_power=' + panel_power + '&panel_slope=' + panel_slope + '&panel_east_azm=' + panel_east_azm + '&iam_factor=' + iam_factor;
+
+    $.getJSON(url, function(resp, textStatus, jqXHR) {
+        production.updateSeries(resp.prod_diagram);
+
+    });
+}
+
+function getData() {
+    $.getJSON('/get_start', function(resp, textStatus, jqXHR) {
+        $("#year").text(resp.params.year);
+        $("#month").text(resp.params.month);
+        $("#day").text(resp.params.day);
+
+        $("#panel_power").text(resp.params.panel_power);
+        $("#panel_slope").text(resp.params.panel_slope);
+        $("#panel_east_azm").text(resp.params.panel_east_azm);
+        $("#iam_factor").text(resp.params.iam_factor);
+
+        production.updateSeries(resp.prod_diagram);
+
+    });
+}
+
+loadScriptSequentially('locale_se.js')
+    .then(() => loadScriptSequentially('mygrid_prod.js'))
+    .then(() => {
+        getData();
+    })
+    .catch(error => displayMessage(error.message, 'error'));
+
+
+
+function displayMessage(message, type) {
+    console.log(message, type);
+}

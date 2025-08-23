@@ -1,0 +1,110 @@
+<!DOCTYPE html>
+<html lang="se">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta http-equiv="X-UA-Compatible" content="ie=edge" />
+    <title>PV Modeling</title>
+
+    <link href="./dark.css" rel="stylesheet" />
+
+    <style>
+        .flex-column {
+            display: flex;
+            flex-flow: column;
+        }
+        .flex-row {
+            display: flex;
+            flex-flow: row;
+            justify-content: space-between;
+            align-items: center;
+        }
+        #forecast {
+            max-width: 800px;
+            flex-basis: 100%;
+            margin: 10px;
+        }
+        #header {
+            max-width: 800px;
+            flex-basis: 100%;
+            border: 2px solid darkcyan;
+            margin-bottom: 10px;
+            margin-top: 10px;
+        }
+        h4 {
+            margin: 0;
+        }
+        .param_container {
+            margin-top: 5px;
+            text-align: center;
+            color: white;
+        }
+        .parameter {
+            color: white;
+            margin: 5px 10px;
+            padding: 5px 10px;
+            border: 2px solid darkcyan;
+        }
+        #pane-shift {
+            width: 70px;
+            height: 45px;
+            margin: 5px 5px 5px 45px;
+            border-radius: 5px;
+            border: 2px solid darkcyan;
+            background-color: rgba(128, 128, 128, 0.2);
+            color: white;
+            font-weight: bold;
+            cursor: pointer;
+
+        }
+        #prod {
+            max-width: 800px;
+            flex-basis: 100%;
+        }
+    </style>
+
+    <script src="./apexcharts.js"></script>
+    <script src="./jquery-3.7.1.min.js"></script>
+</head>
+
+<body>
+    <div class="flex-column" id="forecast">
+        <div class="flex-row" id="header">
+            <div class="param_container">
+                <h4>Year:</h4>
+                <div class="parameter" id="year" contenteditable="true">2025</div>
+            </div>
+            <div class="param_container">
+                <h4>Month:</h4>
+                <div class="parameter" id="month" contenteditable="true">8</div>
+            </div>
+            <div class="param_container">
+                <h4>Day:</h4>
+                <div class="parameter" id="day" contenteditable="true">18</div>
+            </div>
+            <div class="param_container">
+                <h4>P Power:</h4>
+                <div class="parameter" id="panel_power" contenteditable="true">515.0</div>
+            </div>
+            <div class="param_container">
+                <h4>P Slope:</h4>
+                <div class="parameter" id="panel_slope" contenteditable="true">40.5</div>
+            </div>
+            <div class="param_container">
+                <h4>East Azm:</h4>
+                <div class="parameter" id="panel_east_azm" contenteditable="true">-82.5</div>
+            </div>
+            <div class="param_container">
+                <h4>IAM:</h4>
+                <div class="parameter" id="iam_factor" contenteditable="true">1.0</div>
+            </div>
+            <button type="button" id="pane-shift" onclick="updateData()">Update</button>
+        </div>
+        <div id="prod"></div>
+    </div>
+
+
+<script src="pv_modeling.js?v=0.1.0"></script>
+
+</body>
+</html>
