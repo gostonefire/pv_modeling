@@ -83,7 +83,7 @@ async fn get_web_data(config: &Config, params: &Params) -> String {
         iam_factor: params.iam_factor,
     };
 
-    let estimated = get_day_production(production_params);
+    let estimated = get_day_production(production_params).unwrap();
 
     #[derive(Serialize)]
     pub struct Series {
@@ -95,6 +95,7 @@ async fn get_web_data(config: &Config, params: &Params) -> String {
     #[derive(Serialize)]
     struct WebData<'a> {
         prod_diagram: (Series, Series),
+        incidence_diagram: (Series, Series),
         params: &'a Params,
     }
 
@@ -106,7 +107,16 @@ async fn get_web_data(config: &Config, params: &Params) -> String {
         }, Series {
             name: "Estimated".to_string(),
             chart_type: "line".to_string(),
-            data: estimated,
+            data: estimated.power,
+        }),
+        incidence_diagram: (Series {
+            name: "East".to_string(),
+            chart_type: "line".to_string(),
+            data: estimated.incidence_east,
+        }, Series {
+            name: "West".to_string(),
+            chart_type: "line".to_string(),
+            data: estimated.incidence_west,
         }),
         params,
 

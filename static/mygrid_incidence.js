@@ -1,9 +1,9 @@
 // combined production and estimated production
 //
-let prod_options = {
+let incidence_options = {
     series: [],
     chart: {
-        id: 'prod',
+        id: 'incidence',
         group: 'mygrid',
         height: 350,
         type: 'line',
@@ -21,9 +21,12 @@ let prod_options = {
     },
     fill: {
         type:'solid',
-        opacity: [0.35, 1],
+        opacity: [1, 1],
     },
     yaxis: {
+        min: 0,
+        max: 90,
+        reversed: true,
         axisBorder: {
             show: false
         },
@@ -34,7 +37,7 @@ let prod_options = {
             show: true,
             minWidth: 30,
             formatter: function (val) {
-                return val + " kW";
+                return val + " deg";
             }
         }
     },
@@ -59,12 +62,12 @@ let prod_options = {
         },
         y: {
             formatter: function(value, { series, seriesIndex, dataPointIndex, w }) {
-                return Math.round(value * 10) / 10 + ' kW';
+                return Math.round(value * 10) / 10 + ' deg';
             }
         },
     },
     title: {
-        text: 'Power Production',
+        text: 'Sun Incidence',
         floating: true,
         offsetY: 0,
         align: 'center',
@@ -85,5 +88,5 @@ let prod_options = {
 };
 
 
-let production = new ApexCharts(document.querySelector("#prod"), prod_options);
-production.render();
+let incidence = new ApexCharts(document.querySelector("#incidence"), incidence_options);
+incidence.render();

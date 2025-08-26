@@ -1,8 +1,10 @@
+use std::fmt;
+use std::fmt::Formatter;
 use std::ops::Add;
 use chrono::{DateTime, DurationRound, Local, TimeDelta, TimeZone, Timelike};
 use spa_sra::errors::SpaError;
 use spa_sra::spa::{Function, Input, SpaData};
-use crate::models::{DataItem, Parameters};
+use crate::models::{DataItem, Parameters, Production};
 
 
 /// Returns a vector of production values per minute
@@ -10,24 +12,13 @@ use crate::models::{DataItem, Parameters};
 /// # Arguments
 ///
 /// * 'params' - parameters to use in calculations
-pub fn get_day_production(params: Parameters) -> Vec<DataItem> {
+pub fn get_day_production(params: Parameters) -> Result<Production, ProdError> {
     let date_time = Local::now()
         .timezone()
         .with_ymd_and_hms(params.year, params.month, params.day, 0, 0, 0)
         .unwrap();
 
-    let start = date_time;
-
-    let mut result = (0..1440)
-        .into_iter()
-        .map(|i| DataItem{x: start.add(TimeDelta::minutes(i)), y: 0.0})
-        .collect::<Vec<DataItem>>();
-
-    if let Ok(minute_power) = day_power(params, date_time) {
-        minute_power.into_iter().enumerate().for_each(|(i,y)| {result[i].y = y / 1000.0});
-    }
-
-    result
+    Ok(day_power(params, date_time)?)
 }
 
 /// Calculates one day estimated power per minute
@@ -36,8 +27,10 @@ pub fn get_day_production(params: Parameters) -> Vec<DataItem> {
 ///
 /// * 'params' - struct of parameters
 /// * 'date_time' - date to calculate for
-fn day_power(params: Parameters, date_time: DateTime<Local>) -> Result<[f64;1440], SpaError> {
-    let mut result: [f64;1440] = [0.0;1440];
+fn day_power(params: Parameters, date_time: DateTime<Local>) -> Result<Production, SpaError> {
+    let mut power = prepare_result(date_time, 0.0);
+    let mut incidence_east = prepare_result(date_time, 90.0);
+    let mut incidence_west = prepare_result(date_time, 90.0);
 
     // Create an Input instance with relevant parameters, and we are happy with the
     // defaults for atmospheric_refraction, delta_ut1 and delta_t.
@@ -74,11 +67,13 @@ fn day_power(params: Parameters, date_time: DateTime<Local>) -> Result<[f64;1440
         spa.input.azm_rotation = params.panel_east_azm;
         spa.spa_calculate()?;
         let idx_e = schlick_iam(spa.spa_za_inc.incidence, Some(params.iam_factor));
+        incidence_east[minute_of_day].y = spa.spa_za_inc.incidence.clamp(0.0, 90.0);
 
         // Calculate factor on power production given sun incidence angle for westward panels
         spa.input.azm_rotation = 180.0 + params.panel_east_azm;
         spa.spa_calculate()?;
         let idx_w = schlick_iam(spa.spa_za_inc.incidence, Some(params.iam_factor));
+        incidence_west[minute_of_day].y = spa.spa_za_inc.incidence.clamp(0.0, 90.0);
 
         // Calculate total panel power where each side is reduced given incidence angles
         let pwr = params.panel_power * 12.0 * idx_e + params.panel_power * 15.0 * idx_w;
@@ -95,12 +90,16 @@ fn day_power(params: Parameters, date_time: DateTime<Local>) -> Result<[f64;1440
         let t_red = 1.0 - ((params.panel_add_temp + params.temp[minute_of_day] - 25.0).max(0.0) * params.panel_temp_red * ame) / 100.0;
 
         // Record the estimated power at the given point in time
-        result[minute_of_day] = pwr * ame * t_red;
+        power[minute_of_day].y = (pwr * ame * t_red) / 1000.0;
 
         time_of_interest = time_of_interest.add(TimeDelta::minutes(1));
     }
 
-    Ok(result)
+    Ok(Production {
+        power,
+        incidence_east,
+        incidence_west,
+    })
 }
 
 /// Returns max sun elevation in degrees for the given date
@@ -182,4 +181,22 @@ fn air_mass_effect(zenith_angle: f64) -> f64 {
 
     // return percentage of intensity compared to I_0
     intensity / I_0
+}
+
+fn prepare_result(date_time: DateTime<Local>, default: f64) -> Vec<DataItem> {
+    (0..1440)
+        .into_iter()
+        .map(|i| DataItem{x: date_time.add(TimeDelta::minutes(i)), y: default})
+        .collect::<Vec<DataItem>>()
+}
+
+#[derive(Debug)]
+pub struct ProdError(pub String);
+impl fmt::Display for ProdError {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        write!(f, "ProdError: {}", self.0)
+    }
+}
+impl From<SpaError> for ProdError {
+    fn from(e: SpaError) -> Self { ProdError(e.to_string()) }
 }

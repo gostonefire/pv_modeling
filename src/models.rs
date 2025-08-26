@@ -23,3 +23,9 @@ pub struct Parameters {
     pub panel_temp_red: f64,
     pub iam_factor: f64,
 }
+
+pub struct Production {
+    pub power: Vec<DataItem>,
+    pub incidence_east: Vec<DataItem>,
+    pub incidence_west: Vec<DataItem>,
+}

@@ -34,6 +34,7 @@ function updateData() {
 
     $.getJSON(url, function(resp, textStatus, jqXHR) {
         production.updateSeries(resp.prod_diagram);
+        incidence.updateSeries(resp.incidence_diagram);
 
     });
 }
@@ -52,12 +53,14 @@ function getData() {
         $("#iam_factor").text(resp.params.iam_factor);
 
         production.updateSeries(resp.prod_diagram);
+        incidence.updateSeries(resp.incidence_diagram);
 
     });
 }
 
 loadScriptSequentially('locale_se.js')
     .then(() => loadScriptSequentially('mygrid_prod.js'))
+    .then(() => loadScriptSequentially('mygrid_incidence.js'))
     .then(() => {
         getData();
     })
