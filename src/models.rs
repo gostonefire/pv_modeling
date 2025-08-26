@@ -1,8 +1,11 @@
+use chrono::{DateTime, Local};
 use serde::{Deserialize, Serialize};
+use crate::serialize_timestamp;
 
 #[derive(Serialize, Deserialize)]
 pub struct DataItem {
-    pub x: i64,
+    #[serde(with = "serialize_timestamp")]
+    pub x: DateTime<Local>,
     pub y: f64,
 }
 
@@ -16,5 +19,7 @@ pub struct Parameters {
     pub panel_power: f64,
     pub panel_slope: f64,
     pub panel_east_azm: f64,
+    pub panel_add_temp: f64,
+    pub panel_temp_red: f64,
     pub iam_factor: f64,
 }

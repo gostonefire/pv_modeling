@@ -7,6 +7,7 @@ mod manager_fox_cloud;
 mod models;
 mod manager_weather;
 mod cache;
+mod serialize_timestamp;
 
 use actix_web::{middleware, web, App, HttpServer};
 use actix_files::Files;

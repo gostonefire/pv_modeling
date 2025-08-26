@@ -84,14 +84,14 @@ fn fill_minutes(data: Vec<DataItem>) -> [f64;1440] {
         return result;
     }
 
-    let mut pit: i64 = data[0].x;
+    let mut pit= data[0].x;
     let mut idx: usize = 0;
     let mut pit_data: f64 = 0.0;
 
     for di in data.into_iter() {
         while di.x > pit {
             result[idx] = pit_data;
-            pit += 60 * 1000;
+            pit = pit.add(TimeDelta::minutes(1));
             idx += 1;
         }
         pit_data = di.y;
@@ -119,18 +119,18 @@ fn transform_history(history: Vec<WeatherItem>, from: DateTime<Local>, to: DateT
     } else {
         history.into_iter().for_each(|w| {
             result.push(DataItem{
-                x: w.x.duration_trunc(TimeDelta::minutes(1)).unwrap().timestamp_millis()
+                x: w.x.duration_trunc(TimeDelta::minutes(1)).unwrap()
                 , y: w.y
             });
         });
         
-        if result[0].x != from.timestamp_millis() {
-            result.insert(0, DataItem{x: from.timestamp_millis(), y: result[0].y});
+        if result[0].x != from {
+            result.insert(0, DataItem{x: from, y: result[0].y});
         }
 
         let last = result.len() - 1;
-        if result[last].x != to.timestamp_millis() {
-            result.push(DataItem{x: to.timestamp_millis(), y: result[last].y});
+        if result[last].x != to {
+            result.push(DataItem{x: to, y: result[last].y});
         }
         
         result

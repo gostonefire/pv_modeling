@@ -24,10 +24,13 @@ function updateData() {
     let panel_power = $("#panel_power").text();
     let panel_slope = $("#panel_slope").text();
     let panel_east_azm = $("#panel_east_azm").text();
+    let panel_add_temp = $("#panel_add_temp").text();
+    let panel_temp_red = $("#panel_temp_red").text();
     let iam_factor = $("#iam_factor").text();
 
     let url = '/get_data?year=' + year + '&month=' + month + '&day=' + day +
-        '&panel_power=' + panel_power + '&panel_slope=' + panel_slope + '&panel_east_azm=' + panel_east_azm + '&iam_factor=' + iam_factor;
+        '&panel_power=' + panel_power + '&panel_slope=' + panel_slope + '&panel_east_azm=' + panel_east_azm +
+        '&panel_add_temp=' + panel_add_temp + '&panel_temp_red=' + panel_temp_red + '&iam_factor=' + iam_factor;
 
     $.getJSON(url, function(resp, textStatus, jqXHR) {
         production.updateSeries(resp.prod_diagram);
@@ -44,6 +47,8 @@ function getData() {
         $("#panel_power").text(resp.params.panel_power);
         $("#panel_slope").text(resp.params.panel_slope);
         $("#panel_east_azm").text(resp.params.panel_east_azm);
+        $("#panel_add_temp").text(resp.params.panel_add_temp);
+        $("#panel_temp_red").text(resp.params.panel_temp_red);
         $("#iam_factor").text(resp.params.iam_factor);
 
         production.updateSeries(resp.prod_diagram);

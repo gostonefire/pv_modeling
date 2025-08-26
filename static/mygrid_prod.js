@@ -5,7 +5,7 @@ let prod_options = {
     chart: {
         id: 'prod',
         group: 'mygrid',
-        height: 200,
+        height: 350,
         type: 'line',
         toolbar: {
             show: false,
@@ -48,11 +48,11 @@ let prod_options = {
             show: true,
         },
         labels: {
-            show: false,
+            show: true,
         },
     },
     tooltip: {
-        enabled: false,
+        enabled: true,
     },
     title: {
         text: 'Power Production',

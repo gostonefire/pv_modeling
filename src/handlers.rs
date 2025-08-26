@@ -17,6 +17,8 @@ struct Params {
     pub panel_power: f64,
     pub panel_slope: f64,
     pub panel_east_azm: f64,
+    pub panel_add_temp: f64,
+    pub panel_temp_red: f64,
     pub iam_factor: f64,
 }
 
@@ -76,6 +78,8 @@ async fn get_web_data(config: &Config, params: &Params) -> String {
         panel_power: params.panel_power,
         panel_slope: params.panel_slope,
         panel_east_azm: params.panel_east_azm,
+        panel_add_temp: params.panel_add_temp,
+        panel_temp_red: params.panel_temp_red,
         iam_factor: params.iam_factor,
     };
 

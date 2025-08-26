@@ -16,11 +16,11 @@ pub fn get_day_production(params: Parameters) -> Vec<DataItem> {
         .with_ymd_and_hms(params.year, params.month, params.day, 0, 0, 0)
         .unwrap();
 
-    let start = date_time.timestamp_millis();
+    let start = date_time;
 
     let mut result = (0..1440)
         .into_iter()
-        .map(|i| DataItem{x: start + i * 60 * 1000, y: 0.0})
+        .map(|i| DataItem{x: start.add(TimeDelta::minutes(i)), y: 0.0})
         .collect::<Vec<DataItem>>();
 
     if let Ok(minute_power) = day_power(params, date_time) {
@@ -92,7 +92,7 @@ fn day_power(params: Parameters, date_time: DateTime<Local>) -> Result<[f64;1440
         // degree Celsius above 27 degree Celsius. Since sun intensity is directly related to
         // the panel material temperature we use the reduction of sun intensity (ame) to also reduce
         // the estimated panel temperature given time of day.
-        let t_red = 1.0 - ((66.0 + params.temp[minute_of_day] - 27.0) * 0.5 * ame) / 100.0;
+        let t_red = 1.0 - ((params.panel_add_temp + params.temp[minute_of_day] - 25.0).max(0.0) * params.panel_temp_red * ame) / 100.0;
 
         // Record the estimated power at the given point in time
         result[minute_of_day] = pwr * ame * t_red;

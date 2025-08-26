@@ -154,8 +154,7 @@ fn transform_history_data(input: Vec<DeviceHistoryData>) -> Result<Vec<DataItem>
         if set.variable == "pvPower" {
             for data in &set.data {
                 let timestamp = NaiveDateTime::parse_from_str(&data.time, "%Y-%m-%d %H:%M:%S %Z")?
-                    .and_local_timezone(Local).unwrap()
-                    .timestamp_millis();
+                    .and_local_timezone(Local).unwrap();
 
                 result.push(DataItem{x: timestamp, y: data.value});
             }
