@@ -17,8 +17,10 @@ struct Params {
     pub panel_power: f64,
     pub panel_slope: f64,
     pub panel_east_azm: f64,
-    pub panel_add_temp: f64,
     pub panel_temp_red: f64,
+    pub tau: f64,
+    pub tau_down: f64,
+    pub k_gain: f64,
     pub iam_factor: f64,
 }
 
@@ -78,8 +80,10 @@ async fn get_web_data(config: &Config, params: &Params) -> String {
         panel_power: params.panel_power,
         panel_slope: params.panel_slope,
         panel_east_azm: params.panel_east_azm,
-        panel_add_temp: params.panel_add_temp,
         panel_temp_red: params.panel_temp_red,
+        tau: params.tau,
+        tau_down: params.tau_down,
+        k_gain: params.k_gain,
         iam_factor: params.iam_factor,
     };
 
@@ -96,6 +100,7 @@ async fn get_web_data(config: &Config, params: &Params) -> String {
     struct WebData<'a> {
         prod_diagram: (Series, Series),
         incidence_diagram: (Series, Series),
+        temp_diagram: (Series, Series, Series),
         params: &'a Params,
     }
 
@@ -117,6 +122,19 @@ async fn get_web_data(config: &Config, params: &Params) -> String {
             name: "West".to_string(),
             chart_type: "line".to_string(),
             data: estimated.incidence_west,
+        }),
+        temp_diagram: (Series {
+            name: "Ambient".to_string(),
+            chart_type: "line".to_string(),
+            data: estimated.ambient_temperature,
+        }, Series {
+            name: "East".to_string(),
+            chart_type: "line".to_string(),
+            data: estimated.roof_temperature_east,
+        }, Series {
+            name: "West".to_string(),
+            chart_type: "line".to_string(),
+            data: estimated.roof_temperature_west,
         }),
         params,
 
