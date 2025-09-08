@@ -22,6 +22,10 @@ struct Params {
     pub tau_down: f64,
     pub k_gain: f64,
     pub iam_factor: f64,
+    pub start_azm: f64,
+    pub start_elv: f64,
+    pub stop_azm: f64,
+    pub stop_elv: f64,
 }
 
 #[get("/get_data")]
@@ -85,6 +89,10 @@ async fn get_web_data(config: &Config, params: &Params) -> String {
         tau_down: params.tau_down,
         k_gain: params.k_gain,
         iam_factor: params.iam_factor,
+        start_azm: params.start_azm,
+        start_elv: params.start_elv,
+        stop_azm: params.stop_azm,
+        stop_elv: params.stop_elv,   
     };
 
     let estimated = get_day_production(production_params).unwrap();
@@ -101,6 +109,7 @@ async fn get_web_data(config: &Config, params: &Params) -> String {
         prod_diagram: (Series, Series),
         incidence_diagram: (Series, Series),
         temp_diagram: (Series, Series, Series),
+        ame_diagram: Series,
         params: &'a Params,
     }
 
@@ -136,6 +145,11 @@ async fn get_web_data(config: &Config, params: &Params) -> String {
             chart_type: "line".to_string(),
             data: estimated.roof_temperature_west,
         }),
+        ame_diagram: Series {
+            name: "Air mass effect".to_string(),
+            chart_type: "line".to_string(),
+            data: estimated.air_mass_effect,       
+        },
         params,
 
     };

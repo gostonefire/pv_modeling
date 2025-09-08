@@ -20,12 +20,12 @@
             align-items: center;
         }
         #forecast {
-            max-width: 1200px;
+            max-width: 1400px;
             flex-basis: 100%;
             margin: 10px;
         }
         #header {
-            max-width: 1200px;
+            max-width: 1400px;
             flex-basis: 100%;
             border: 2px solid darkcyan;
             margin-bottom: 10px;
@@ -57,7 +57,7 @@
             cursor: pointer;
 
         }
-        #prod {
+        .diagram {
             max-width: 1200px;
             flex-basis: 100%;
         }
@@ -114,11 +114,30 @@
                 <h4>IAM:</h4>
                 <div class="parameter" id="iam_factor" contenteditable="true">1.0</div>
             </div>
+
+            <div class="param_container">
+                <h4>Up Azm:</h4>
+                <div class="parameter" id="start_azm" contenteditable="true">1.0</div>
+            </div>
+            <div class="param_container">
+                <h4>Up Elv:</h4>
+                <div class="parameter" id="start_elv" contenteditable="true">1.0</div>
+            </div>
+            <div class="param_container">
+                <h4>Down Azm:</h4>
+                <div class="parameter" id="stop_azm" contenteditable="true">1.0</div>
+            </div>
+            <div class="param_container">
+                <h4>Down Elv:</h4>
+                <div class="parameter" id="stop_elv" contenteditable="true">1.0</div>
+            </div>
+
             <button type="button" id="pane-shift" onclick="updateData()">Update</button>
         </div>
-        <div id="prod"></div>
-        <div id="temperature"></div>
-        <div id="incidence"></div>
+        <div class="diagram" id="prod"></div>
+        <div class="diagram" id="temperature"></div>
+        <div class="diagram" id="air_mass_effect"></div>
+        <div class="diagram" id="incidence"></div>
     </div>
 
 <script src="pv_modeling.js?v=0.1.0"></script>

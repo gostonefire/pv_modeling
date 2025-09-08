@@ -24,6 +24,10 @@ pub struct Parameters {
     pub tau_down: f64,
     pub k_gain: f64,
     pub iam_factor: f64,
+    pub start_azm: f64,
+    pub start_elv: f64,
+    pub stop_azm: f64,
+    pub stop_elv: f64,
 }
 
 pub struct Production {
@@ -33,4 +37,5 @@ pub struct Production {
     pub ambient_temperature: Vec<DataItem>,
     pub roof_temperature_east: Vec<DataItem>,
     pub roof_temperature_west: Vec<DataItem>,
+    pub air_mass_effect: Vec<DataItem>,
 }

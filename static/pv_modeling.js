@@ -32,14 +32,21 @@ function updateData() {
 
     let iam_factor = $("#iam_factor").text();
 
+    let start_azm = $("#start_azm").text();
+    let start_elv = $("#start_elv").text();
+    let stop_azm = $("#stop_azm").text();
+    let stop_elv = $("#stop_elv").text();
+
     let url = '/get_data?year=' + year + '&month=' + month + '&day=' + day +
         '&panel_power=' + panel_power + '&panel_slope=' + panel_slope + '&panel_east_azm=' + panel_east_azm +
-        '&panel_temp_red=' + panel_temp_red + '&tau=' + tau + '&tau_down=' + tau_down + '&k_gain=' + k_gain + '&iam_factor=' + iam_factor;
+        '&panel_temp_red=' + panel_temp_red + '&tau=' + tau + '&tau_down=' + tau_down + '&k_gain=' + k_gain + '&iam_factor=' + iam_factor +
+        '&start_azm=' + start_azm + '&start_elv=' + start_elv + '&stop_azm=' + stop_azm + '&stop_elv=' + stop_elv;
 
     $.getJSON(url, function(resp, textStatus, jqXHR) {
         production.updateSeries(resp.prod_diagram);
         incidence.updateSeries(resp.incidence_diagram);
         temp.updateSeries(resp.temp_diagram);
+        ame.updateSeries([resp.ame_diagram]);
     });
 }
 
@@ -61,9 +68,15 @@ function getData() {
 
         $("#iam_factor").text(resp.params.iam_factor);
 
+        $("#start_azm").text(resp.params.start_azm);
+        $("#start_elv").text(resp.params.start_elv);
+        $("#stop_azm").text(resp.params.stop_azm);
+        $("#stop_elv").text(resp.params.stop_elv);
+
         production.updateSeries(resp.prod_diagram);
         incidence.updateSeries(resp.incidence_diagram);
         temp.updateSeries(resp.temp_diagram);
+        ame.updateSeries([resp.ame_diagram]);
 
     });
 }
@@ -72,6 +85,7 @@ loadScriptSequentially('locale_se.js')
     .then(() => loadScriptSequentially('mygrid_prod.js'))
     .then(() => loadScriptSequentially('mygrid_incidence.js'))
     .then(() => loadScriptSequentially('mygrid_temp.js'))
+    .then(() => loadScriptSequentially('mygrid_ame.js'))
     .then(() => {
         getData();
     })
