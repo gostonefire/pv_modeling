@@ -148,7 +148,7 @@ async fn get_web_data(config: &Config, params: &Params) -> String {
         ame_diagram: Series {
             name: "Air mass effect".to_string(),
             chart_type: "line".to_string(),
-            data: estimated.air_mass_effect,       
+            data: estimated.sun_intensity_factor,
         },
         params,
 

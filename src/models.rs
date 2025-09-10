@@ -37,5 +37,5 @@ pub struct Production {
     pub ambient_temperature: Vec<DataItem>,
     pub roof_temperature_east: Vec<DataItem>,
     pub roof_temperature_west: Vec<DataItem>,
-    pub air_mass_effect: Vec<DataItem>,
+    pub sun_intensity_factor: Vec<DataItem>,
 }

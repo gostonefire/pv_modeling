@@ -18,7 +18,7 @@ pub fn get_day_production(params: Parameters) -> Result<Production, ProdError> {
         .with_ymd_and_hms(params.year, params.month, params.day, 0, 0, 0)
         .unwrap();
 
-    Ok(day_power(params, date_time)?)
+    day_power(params, date_time)
 }
 
 /// Calculates one day estimated power per minute
@@ -27,27 +27,26 @@ pub fn get_day_production(params: Parameters) -> Result<Production, ProdError> {
 ///
 /// * 'params' - struct of parameters
 /// * 'date_time' - date to calculate for
-fn day_power(params: Parameters, date_time: DateTime<Local>) -> Result<Production, SpaError> {
+fn day_power(params: Parameters, date_time: DateTime<Local>) -> Result<Production, ProdError> {
     let mut power: [f64;1440] = [0.0;1440];
     let sp = solar_positions(date_time, &params)?;
+    let sun_intensity_factor = sun_intensity_factor(&sp.zenith);
     let (up, down) = full_sun_minute(&params, &sp);
-    let roof_temperature_east: [f64;1440] = get_roof_temperature(&params, Some(up), sp.incidence_east, sp.zenith);
-    let roof_temperature_west: [f64;1440] = get_roof_temperature(&params, Some(up), sp.incidence_west, sp.zenith);
-    let mut ame: [f64;1440] = [0.0;1440];
+    let roof_temperature_east: [f64;1440] = roof_temperature(&params, Some(up), &sp.incidence_east, &sun_intensity_factor)?;
+    let roof_temperature_west: [f64;1440] = roof_temperature(&params, Some(up), &sp.incidence_west, &sun_intensity_factor)?;
 
     // Loop through the day with a one-minute incrementation
     for minute_of_day in sp.sunrise..sp.sunset {
         // Calculate factor on power production given sun incidence angles
-        let inc_red_e = schlick_iam(sp.incidence_east[minute_of_day], Some(params.iam_factor));
-        let inc_red_w = schlick_iam(sp.incidence_west[minute_of_day], Some(params.iam_factor));
+        let inc_red_e = schlick_iam(sp.incidence_east[minute_of_day], params.iam_factor);
+        let inc_red_w = schlick_iam(sp.incidence_west[minute_of_day], params.iam_factor);
 
         // Calculate power reduction due to high temperatures
         let temp_red_e = 1.0 - (roof_temperature_east[minute_of_day].max(0.0) - 25.0) * params.panel_temp_red / 100.0;
         let temp_red_w = 1.0 - (roof_temperature_west[minute_of_day].max(0.0) - 25.0) * params.panel_temp_red / 100.0;
 
         // Calculate power reduction due to the atmospheric effect given sun altitude relative to zenith
-        let ame_red = air_mass_effect(sp.zenith[minute_of_day]);
-        ame[minute_of_day] = ame_red;
+        let ame_red = sun_intensity_factor[minute_of_day];
 
         // Calculate total panel power where each side is reduced given the above power reduction factors
         let pwr = params.panel_power * 12.0 * inc_red_e * temp_red_e + params.panel_power * 15.0 * inc_red_w * temp_red_w;
@@ -67,7 +66,7 @@ fn day_power(params: Parameters, date_time: DateTime<Local>) -> Result<Productio
         ambient_temperature: prepare_result(date_time, &params.temp),
         roof_temperature_east: prepare_result(date_time, &roof_temperature_east),
         roof_temperature_west: prepare_result(date_time, &roof_temperature_west),
-        air_mass_effect: prepare_result(date_time, &ame),
+        sun_intensity_factor: prepare_result(date_time, &sun_intensity_factor),
     })
 }
 
@@ -94,7 +93,7 @@ fn full_sun_minute(params: &Parameters, solar_positions: &SolarPositions) -> (us
     (up,down)
 }
 
-/// Calculates and exponential increase for v between v0 and vn
+/// Calculates an exponential increase for v between v0 and vn
 /// The output is an exponential factor between 0 and 1
 ///
 /// # Arguments
@@ -110,7 +109,7 @@ fn exp_increase(v: usize, v0: usize, vn: usize, exp: i32) -> f64 {
     (enumerator / denominator).powi(exp)
 }
 
-/// Calculates and exponential decrease for v between v0 and vn
+/// Calculates an exponential decrease for v between v0 and vn
 /// The output is an exponential decrease factor between 1 and 0
 ///
 /// # Arguments
@@ -132,101 +131,42 @@ fn exp_decrease(v: usize, v0: usize, vn: usize, exp: i32) -> f64 {
 ///
 /// * 'theta_deg' - Sun-panel incidence angle
 /// * 'factor' - level of flatness, 1 gives cosine flatness, higher values give more flatness
-pub fn schlick_iam(theta_deg: f64, factor: Option<f64>) -> f64 {
-    // Handle NaN/inf robustly.
-    if !theta_deg.is_finite() {
-        return 0.0;
-    }
-
-    // Model is symmetric in angle; anything beyond 90° contributes zero.
-    let theta = theta_deg.abs();
-    if theta >= 90.0 {
-        return 0.0;
-    }
-
-    let factor = factor.unwrap_or(5.0);
-
-    // The Schlick IAM formula
-    1.0 - (1.0 - theta.to_radians().cos()).powf(factor)
+pub fn schlick_iam(theta_deg: f64, factor: f64) -> f64 {
+    1.0 - (1.0 - theta_deg.clamp(0.0, 90.0).to_radians().cos()).powf(factor)
 }
 
 /// Returns percentage of sun intensity in relation to intensity external to the earth's atmosphere.
+/// The algorithm (https://en.wikipedia.org/wiki/Air_mass_(solar_energy)) is based on the
+/// air mass effect and then approximated to sun intensity.
 ///
 /// # Arguments
 ///
-/// * 'zenith_angle' - sun angle in relation to sun zenith
-fn air_mass_effect(zenith_angle: f64) -> f64 {
+/// * 'zenith_angle' - sun angle in relation to sun zenith (expected to be clamped between 0 and 90)
+fn sun_intensity_factor(zenith_angle: &[f64;1440]) -> [f64;1440] {
+
+    // The ratio between the earth's radius (6371 km) and the effective height of the atmosphere (9 km)
     const R: f64 = 708.0;
 
     // Intensity external to earths atmosphere
     const I_0: f64 = 1353.0;
 
-    let zenith_cos = zenith_angle.to_radians().cos();
-    let enumerator = 2.0 * R + 1.0;
-    let denominator = ((R * zenith_cos).powf(2.0) + 2.0 * R + 1.0).sqrt() + R * zenith_cos;
-
-    let am = enumerator / denominator;
-    //let intensity = 1.1 * I_0 * 0.7f64.powf(am.powf(0.678));
-    let intensity = 1.1 * I_0 * 0.7f64.powf(am.powf(0.6));
-
-    // return percentage of intensity compared to I_0
-    intensity / I_0
-}
-
-/// Prepares a result vector of data items
-///
-/// # Arguments
-///
-/// * 'date_time' - date time truncated to day
-fn prepare_result(date_time: DateTime<Local>, default: &[f64]) -> Vec<DataItem> {
-    (0..1440)
-        .into_iter()
-        .map(|i| DataItem{x: date_time.add(TimeDelta::minutes(i)), y: default[i as usize]})
-        .collect::<Vec<DataItem>>()
-}
-
-#[derive(Debug)]
-pub struct ProdError(pub String);
-impl fmt::Display for ProdError {
-    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        write!(f, "ProdError: {}", self.0)
-    }
-}
-impl From<SpaError> for ProdError {
-    fn from(e: SpaError) -> Self { ProdError(e.to_string()) }
-}
-
-/// Calculates roof temperature given ambient temperature and effect from direct sunlight
-///
-/// # Arguments
-///
-/// * 'params' - parameters
-/// * 'up' - time when the sun is free from obstacles
-/// * 'inc_deg' - sun incidence on panels in degrees
-fn get_roof_temperature(params: &Parameters, up: Option<usize>, inc_deg: [f64;1440], zenith: [f64;1440]) -> [f64;1440] {
-
-    let t_roof = roof_temperature(
-        &params.temp,
-        &inc_deg,
-        60.0,
-        params.tau * 3600.0,
-        params.k_gain,
-        None,
-        None,
-        Some(params.tau_down * 3600.0),
-        up,
-        &zenith);
-
     let mut result: [f64;1440] = [0.0; 1440];
-    (0..1440)
-        .into_iter()
-        .for_each(|i| {
-            result[i] = t_roof[i];
-        });
+
+    for i in 0..1440usize {
+        let zenith_cos = zenith_angle[i].to_radians().cos();
+        let enumerator = 2.0 * R + 1.0;
+        let denominator = ((R * zenith_cos).powf(2.0) + 2.0 * R + 1.0).sqrt() + R * zenith_cos;
+        let am = enumerator / denominator;
+
+        // Approximation of sun intensity where the shape 0.6 replaces the originally proposed shape of 0.678
+        let intensity = 1.1 * I_0 * 0.7f64.powf(am.powf(0.6));
+
+        // Percentage of intensity compared to I_0
+        result[i] = intensity / I_0;
+    }
 
     result
 }
-
 
 /// Returns sun incidence, zenith, azimuth and elevation angles per minute in degrees for the given date.
 ///
@@ -292,6 +232,38 @@ fn solar_positions(date_time: DateTime<Local>, params: &Parameters) -> Result<So
     })
 }
 
+/// Calculates roof temperature given ambient temperature and effect from direct sunlight
+///
+/// # Arguments
+///
+/// * 'params' - parameters
+/// * 'up' - time when the sun is free from obstacles
+/// * 'inc_deg' - sun incidence on panels in degrees
+/// * 'sif' - sun intensity factor
+fn roof_temperature(params: &Parameters, up: Option<usize>, inc_deg: &[f64;1440], sif: &[f64;1440]) -> Result<[f64;1440], ProdError> {
+
+    let t_roof = roof_thermodynamics(
+        &params.temp,
+        inc_deg,
+        sif,
+        60.0,
+        params.tau * 3600.0,
+        params.k_gain,
+        None,
+        None,
+        Some(params.tau_down * 3600.0),
+        up)?;
+
+    let mut result: [f64;1440] = [0.0; 1440];
+    (0..1440)
+        .into_iter()
+        .for_each(|i| {
+            result[i] = t_roof[i];
+        });
+
+    Ok(result)
+}
+
 /// Roof temperature over time using a 1st-order thermal RC model.
 ///
 /// State update (explicit Euler):
@@ -308,6 +280,7 @@ fn solar_positions(date_time: DateTime<Local>, params: &Parameters) -> Result<So
 /// # Arguments
 /// * `t_air`    : ambient air temperature [°C], length N
 /// * `inc_deg`  : sun incidence angle to the roof normal [degrees], length N
+/// * `sif`      : sun intensity factor, length N
 /// * `dt`       : timestep [s], e.g. 600.0
 /// * `tau`      : time constant for heating [s]
 /// * `k_gain`   : °C boost at clear-sky normal incidence (proxy for A*α*G_max/U)
@@ -322,9 +295,10 @@ fn solar_positions(date_time: DateTime<Local>, params: &Parameters) -> Result<So
 /// # Panics
 ///
 /// Panics if input lengths mismatch or if `dt <= 0.0` or any tau ≤ 0.0.
-pub fn roof_temperature(
+fn roof_thermodynamics(
     t_air: &[f64],
     inc_deg: &[f64],
+    sif: &[f64],
     dt: f64,
     tau: f64,
     k_gain: f64,
@@ -332,20 +306,31 @@ pub fn roof_temperature(
     t0: Option<f64>,
     tau_down: Option<f64>,
     up: Option<usize>,
-    zenith: &[f64],
-) -> Vec<f64> {
+) -> Result<Vec<f64>, ProdError> {
     let n = t_air.len();
     if n == 0 {
-        return Vec::new();
+        return Ok(Vec::new());
     }
-    assert_eq!(inc_deg.len(), n, "inc_rad must match t_air length");
+
+    // Check arrays lengths and input values
+    if inc_deg.len() != n || sif.len() != n {
+        return Err("inc_rad and sif must have the same length as t_air".into());
+    }
     if let Some(c) = clouds {
-        assert_eq!(c.len(), n, "clouds must match t_air length");
+        if c.len() != n {
+            return Err("clouds must have the same length as t_air".into());
+        }
     }
-    assert!(dt > 0.0, "dt must be > 0");
-    assert!(tau > 0.0, "tau must be > 0");
+    if dt <= 0.0 {
+        return Err("dt must be > 0".into());
+    }
+    if tau <= 0.0 {
+        return Err("tau must be > 0".into());
+    }
     if let Some(td) = tau_down {
-        assert!(td > 0.0, "tau_down must be > 0");
+        if td <= 0.0 {
+            return Err("tau_down must be > 0".into());
+        }
     }
 
     let mut t_roof = vec![0.0; n];
@@ -357,7 +342,6 @@ pub fn roof_temperature(
     
     t_roof[0] = t0.unwrap_or(t_air_0);
     let tau_cool = tau_down.unwrap_or(tau);
-
     let up_delay = up.unwrap_or(0);
 
     for k in 1..n {
@@ -380,7 +364,7 @@ pub fn roof_temperature(
             t_air[k]
         };
 
-        let t_eq = t_air_k + sun_boost * air_mass_effect(zenith[k]);
+        let t_eq = t_air_k + sun_boost * sif[k];
 
         let tau_eff = if t_eq > t_roof[k - 1] { tau } else { tau_cool };
         let alpha = dt / tau_eff; // Euler gain
@@ -388,7 +372,33 @@ pub fn roof_temperature(
         t_roof[k] = t_roof[k - 1] + (t_eq - t_roof[k - 1]) * alpha;
     }
 
-    t_roof
+    Ok(t_roof)
+}
+
+/// Prepares a result vector of data items
+///
+/// # Arguments
+///
+/// * 'date_time' - date time truncated to day
+fn prepare_result(date_time: DateTime<Local>, default: &[f64]) -> Vec<DataItem> {
+    (0..1440)
+        .into_iter()
+        .map(|i| DataItem{x: date_time.add(TimeDelta::minutes(i)), y: default[i as usize]})
+        .collect::<Vec<DataItem>>()
+}
+
+#[derive(Debug)]
+pub struct ProdError(pub String);
+impl fmt::Display for ProdError {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        write!(f, "ProdError: {}", self.0)
+    }
+}
+impl From<SpaError> for ProdError {
+    fn from(e: SpaError) -> Self { ProdError(e.to_string()) }
+}
+impl From<&str> for ProdError {
+    fn from(e: &str) -> Self { ProdError(e.to_string()) }
 }
 
 struct SolarPositions {
