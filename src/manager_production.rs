@@ -30,11 +30,10 @@ pub fn get_day_production(params: Parameters) -> Result<Production, ProdError> {
 fn day_power(params: Parameters, date_time: DateTime<Local>) -> Result<Production, SpaError> {
     let mut power: [f64;1440] = [0.0;1440];
     let sp = solar_positions(date_time, &params)?;
-    let roof_temperature_east: [f64;1440] = get_roof_temperature(&params, sp.incidence_east);
-    let roof_temperature_west: [f64;1440] = get_roof_temperature(&params, sp.incidence_west);
-    let mut ame: [f64;1440] = [0.0;1440];
-
     let (up, down) = full_sun_minute(&params, &sp);
+    let roof_temperature_east: [f64;1440] = get_roof_temperature(&params, Some(up), sp.incidence_east, sp.zenith);
+    let roof_temperature_west: [f64;1440] = get_roof_temperature(&params, Some(up), sp.incidence_west, sp.zenith);
+    let mut ame: [f64;1440] = [0.0;1440];
 
     // Loop through the day with a one-minute incrementation
     for minute_of_day in sp.sunrise..sp.sunset {
@@ -132,7 +131,7 @@ fn exp_decrease(v: usize, v0: usize, vn: usize, exp: i32) -> f64 {
 /// # Arguments
 ///
 /// * 'theta_deg' - Sun-panel incidence angle
-/// * 'factor' - level of flatness, 1 gives cosine flatness, higher values gives more flatness
+/// * 'factor' - level of flatness, 1 gives cosine flatness, higher values give more flatness
 pub fn schlick_iam(theta_deg: f64, factor: Option<f64>) -> f64 {
     // Handle NaN/inf robustly.
     if !theta_deg.is_finite() {
@@ -159,7 +158,7 @@ pub fn schlick_iam(theta_deg: f64, factor: Option<f64>) -> f64 {
 fn air_mass_effect(zenith_angle: f64) -> f64 {
     const R: f64 = 708.0;
 
-    // Intensity external to the earths atmosphere
+    // Intensity external to earths atmosphere
     const I_0: f64 = 1353.0;
 
     let zenith_cos = zenith_angle.to_radians().cos();
@@ -167,78 +166,12 @@ fn air_mass_effect(zenith_angle: f64) -> f64 {
     let denominator = ((R * zenith_cos).powf(2.0) + 2.0 * R + 1.0).sqrt() + R * zenith_cos;
 
     let am = enumerator / denominator;
-    let intensity = 1.1 * I_0 * 0.7f64.powf(am.powf(0.678));
+    //let intensity = 1.1 * I_0 * 0.7f64.powf(am.powf(0.678));
+    let intensity = 1.1 * I_0 * 0.7f64.powf(am.powf(0.6));
 
     // return percentage of intensity compared to I_0
     intensity / I_0
 }
-
-
-/// Returns percentage of sun intensity relative to extra‑terrestrial irradiance (I0),
-/// including effects of air mass geometry, air pressure (absolute air mass), and water vapor.
-///
-/// Arguments:
-/// - zenith_angle: Sun angle relative to zenith [deg]
-/// - pressure_hpa: Optional surface pressure [hPa] (defaults to 1013.25)
-/// - rel_humidity: Optional relative humidity [0..1]
-/// - temperature_c: Optional near-surface air temperature [°C] (used with RH to estimate water vapor)
-fn air_mass_effect_with_met(
-    zenith_angle: f64,
-    pressure_hpa: Option<f64>,
-    rel_humidity: Option<f64>,
-    temperature_c: Option<f64>,
-) -> f64 {
-    const R: f64 = 708.0;
-    // Intensity external to the earth's atmosphere
-    const I_0: f64 = 1353.0;
-    const P0_HPA: f64 = 1013.25;
-
-    let zenith_cos = zenith_angle.to_radians().cos().max(0.0);
-    let enumerator = 2.0 * R + 1.0;
-    let denominator = ((R * zenith_cos).powf(2.0) + 2.0 * R + 1.0).sqrt() + R * zenith_cos;
-
-    // Geometric air mass
-    let am = enumerator / denominator;
-
-    // Pressure-corrected (absolute) air mass
-    let p = pressure_hpa.unwrap_or(P0_HPA).clamp(800.0, 1050.0);
-    let am_abs = am * (p / P0_HPA);
-
-    // Base broadband clear-sky attenuation (same shape you had, now using am_abs)
-    let base_intensity = 1.1 * I_0 * 0.7f64.powf(am_abs.powf(0.678));
-
-    // Optional water-vapor attenuation term (very lightweight approximation).
-    // Estimate precipitable water (w, cm) from surface RH and T via vapor pressure.
-    // Note: This is a crude proxy; for best results feed precipitable water directly if available.
-    let tw = if let (Some(rh), Some(t_c)) = (rel_humidity, temperature_c) {
-        let rh = rh.clamp(0.0, 1.0);
-        // Saturation vapor pressure (Tetens, hPa)
-        let es = saturation_vapor_pressure_hpa(t_c);
-        // Actual vapor pressure (hPa)
-        let e = rh * es;
-        // Very rough mapping from surface vapor pressure to column water (cm), bounded
-        // (typical PWV ~0.5–5 cm; clamp to [0, 7] to avoid pathological values)
-        let w_cm = (0.1 * e).clamp(0.0, 7.0);
-
-        // Water vapor transmittance (empirical; keep within [0.6, 1.0] for stability)
-        (1.0 - 0.077 * (w_cm * am_abs).powf(0.3)).clamp(0.6, 1.0)
-    } else {
-        1.0
-    };
-
-    let intensity = base_intensity * tw;
-
-    // return percentage of intensity compared to I_0
-    intensity / I_0
-}
-
-/// Saturation vapor pressure over liquid water (Tetens) in hPa given temperature in °C.
-fn saturation_vapor_pressure_hpa(t_c: f64) -> f64 {
-    // Valid and smooth for typical surface temps
-    6.112 * (17.67 * t_c / (t_c + 243.5)).exp()
-}
-
-
 
 /// Prepares a result vector of data items
 ///
@@ -268,8 +201,9 @@ impl From<SpaError> for ProdError {
 /// # Arguments
 ///
 /// * 'params' - parameters
+/// * 'up' - time when the sun is free from obstacles
 /// * 'inc_deg' - sun incidence on panels in degrees
-fn get_roof_temperature(params: &Parameters, inc_deg: [f64;1440]) -> [f64;1440] {
+fn get_roof_temperature(params: &Parameters, up: Option<usize>, inc_deg: [f64;1440], zenith: [f64;1440]) -> [f64;1440] {
 
     let t_roof = roof_temperature(
         &params.temp,
@@ -279,7 +213,9 @@ fn get_roof_temperature(params: &Parameters, inc_deg: [f64;1440]) -> [f64;1440] 
         params.k_gain,
         None,
         None,
-        Some(params.tau_down * 3600.0));
+        Some(params.tau_down * 3600.0),
+        up,
+        &zenith);
 
     let mut result: [f64;1440] = [0.0; 1440];
     (0..1440)
@@ -296,7 +232,7 @@ fn get_roof_temperature(params: &Parameters, inc_deg: [f64;1440]) -> [f64;1440] 
 ///
 /// # Arguments
 ///
-/// * 'date_time' - DateTime object carrying date of interest
+/// * 'date_time' - DateTime object carrying the date of interest
 /// * 'params' - various input parameters
 fn solar_positions(date_time: DateTime<Local>, params: &Parameters) -> Result<SolarPositions, SpaError> {
     let mut input = Input::from_date_time(date_time);
@@ -380,9 +316,11 @@ fn solar_positions(date_time: DateTime<Local>, params: &Parameters) -> Result<So
 /// * `tau_down` : optional time constant for cooling [s] (defaults to `tau`)
 ///
 /// # Returns
+///
 /// Vector of roof temperatures [°C], length N.
 ///
 /// # Panics
+///
 /// Panics if input lengths mismatch or if `dt <= 0.0` or any tau ≤ 0.0.
 pub fn roof_temperature(
     t_air: &[f64],
@@ -393,6 +331,8 @@ pub fn roof_temperature(
     clouds: Option<&[f64]>,
     t0: Option<f64>,
     tau_down: Option<f64>,
+    up: Option<usize>,
+    zenith: &[f64],
 ) -> Vec<f64> {
     let n = t_air.len();
     if n == 0 {
@@ -409,16 +349,38 @@ pub fn roof_temperature(
     }
 
     let mut t_roof = vec![0.0; n];
-    t_roof[0] = t0.unwrap_or(t_air[0]);
+    let t_air_0 = if up.is_some() {
+        t_air[0] - 4.0
+    } else {
+        t_air[0]
+    };
+    
+    t_roof[0] = t0.unwrap_or(t_air_0);
     let tau_cool = tau_down.unwrap_or(tau);
+
+    let up_delay = up.unwrap_or(0);
 
     for k in 1..n {
         // clouds[k] defaults to 1.0 if not provided
         let cloud_k = clouds.map_or(1.0, |c| c[k]);
+
         // Use projection by incidence: cos(inc_rad), clamped to [0, +inf) at 0.
-        let projection = inc_deg[k].to_radians().cos().max(0.0);
+        let inc_deg_k = if k <= up_delay {
+            90.0
+        } else {
+            inc_deg[k]
+        };
+
+        let projection = inc_deg_k.to_radians().cos().max(0.0);
         let sun_boost = k_gain * projection * cloud_k; // [°C]
-        let t_eq = t_air[k] + sun_boost;
+
+        let t_air_k = if k <= up_delay {
+            t_air[k] - 4.0
+        } else {
+            t_air[k]
+        };
+
+        let t_eq = t_air_k + sun_boost * air_mass_effect(zenith[k]);
 
         let tau_eff = if t_eq > t_roof[k - 1] { tau } else { tau_cool };
         let alpha = dt / tau_eff; // Euler gain
